@@ -1,0 +1,57 @@
+# =============================================================
+# DADOS LOCAIS — jamais versionar dados brutos ou processados
+# arquivos Parquet podem ter gigabytes e travar o repositório
+# =============================================================
+data/
+*.parquet
+*.csv
+*.json.gz
+
+# =============================================================
+# CREDENCIAIS — o maior erro de segurança em portfólios públicos
+# nunca subir chaves de API, senhas ou tokens para o GitHub
+# =============================================================
+.env
+.env.*
+*.pem
+*.key
+
+# =============================================================
+# CACHE DO SPARK — gerado automaticamente durante o processamento
+# não tem valor nenhum no repositório, só ocupa espaço
+# =============================================================
+spark-warehouse/
+derby.log
+metastore_db/
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# =============================================================
+# AMBIENTE VIRTUAL PYTHON — cada dev cria o seu localmente
+# subir isso quebraria o projeto de qualquer outro contribuidor
+# =============================================================
+venv/
+.venv/
+env/
+
+# =============================================================
+# LOGS — gerados em tempo de execução, não fazem parte do código
+# =============================================================
+*.log
+logs/
+
+# =============================================================
+# SISTEMA OPERACIONAL — arquivos invisíveis que o Windows e Mac
+# criam automaticamente e que poluem o repositório
+# =============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =============================================================
+# CHECKPOINT DO SPARK STREAMING — gerado durante o streaming
+# contém estado temporário que não deve ser versionado
+# =============================================================
+checkpoints/
