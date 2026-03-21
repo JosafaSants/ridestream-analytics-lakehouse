@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "christian-kohler.path-intellisense",
+    "ms-azuretools.vscode-docker",
+    "charliermarsh.ruff",
+    "mtxr.sqltools",
+    "usernamehwj.error-lens",
+    "oderwat.indent-rainbow",
+    "mechatroner.rainbow-csv",
+    "tamasfe.even-better-toml"
+  ]
+}

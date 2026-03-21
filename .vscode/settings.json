@@ -1,0 +1,22 @@
+{
+  // Formata o arquivo automaticamente ao salvar — evita discussões de estilo no PR
+  "editor.formatOnSave": true,
+
+  // Ruff como formatter padrão para Python — mais rápido que o Black
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+
+  // Linha guia em 88 caracteres — padrão do Ruff para projetos de dados
+  "editor.rulers": [88],
+
+  // Mostra o branch atual sempre visível na barra inferior
+  "git.enableSmartCommit": true,
+
+  // Terminal sempre abre na raiz do projeto
+  "terminal.integrated.cwd": "${workspaceFolder}",
+
+  // GitLens mostra quem escreveu cada linha sem poluir a tela
+  "gitlens.currentLine.enabled": true,
+  "gitlens.hovers.currentLine.over": "line"
+}
