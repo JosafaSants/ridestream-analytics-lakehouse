@@ -40,7 +40,7 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | Funcionalidade | Descrição | Versão |
 |---|---|---|
 | ⚙️ **Setup do Ambiente** | VS Code, Git e estrutura de pastas | ✅ v0.1 |
-| 🏗️ **Infraestrutura** | Kafka e Zookeeper via Docker Compose | 🔜 v0.2 |
+| 🏗️ **Infraestrutura** | Kafka e Zookeeper via Docker Compose | ✅ v0.2 |
 | 🥉 **Camada Bronze** | Ingestão raw do Kafka para Parquet | 🔜 v0.3 |
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | 🔜 v0.4 |
 | 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.5 |
@@ -116,7 +116,7 @@ ridestream-analytics-lakehouse/
 ## 🗺️ Roadmap
 
 - [x] **v0.1** — Setup do ambiente, Git e estrutura de pastas ✅
-- [ ] **v0.2** — Infraestrutura Kafka via Docker Compose 🔜
+- [x] **v0.2** — Infraestrutura Kafka via Docker Compose ✅
 - [ ] **v0.3** — Camada Bronze — ingestão raw 🔜
 - [ ] **v0.4** — Camada Silver — limpeza e deduplicação 🔜
 - [ ] **v0.5** — Camada Gold — KPIs com dbt 🔜
@@ -132,6 +132,13 @@ ridestream-analytics-lakehouse/
 - VS Code configurado com extensões profissionais de engenharia de dados
 - Estrutura de pastas do projeto definida seguindo boas práticas
 - `.gitignore` configurado para projetos de dados com Spark e Kafka
+
+### ✅ v0.2 — Infraestrutura com Docker e Kafka
+- Docker Desktop v4.65.0 instalado e configurado no Windows
+- WSL 2 atualizado para suportar o Docker
+- Kafka, Zookeeper e Kafka UI configurados via Docker Compose
+- Interface visual do Kafka acessível em `http://localhost:8080`
+- Cluster `ridestream-local` online e pronto para receber eventos
 
 ---
 
