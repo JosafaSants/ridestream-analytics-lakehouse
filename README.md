@@ -41,7 +41,8 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 |---|---|---|
 | ⚙️ **Setup do Ambiente** | VS Code, Git e estrutura de pastas | ✅ v0.1 |
 | 🏗️ **Infraestrutura** | Kafka e Zookeeper via Docker Compose | ✅ v0.2 |
-| 🥉 **Camada Bronze** | Ingestão raw do Kafka para Parquet | 🔜 v0.3 |
+| 📡 **Producer** | Simulador de eventos de corridas para o Kafka | ✅ v0.3 |
+| 🥉 **Camada Bronze** | Ingestão raw do Kafka para Parquet | 🔜 v0.4 |
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | 🔜 v0.4 |
 | 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.5 |
 | 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.6 |
@@ -117,10 +118,11 @@ ridestream-analytics-lakehouse/
 
 - [x] **v0.1** — Setup do ambiente, Git e estrutura de pastas ✅
 - [x] **v0.2** — Infraestrutura Kafka via Docker Compose ✅
-- [ ] **v0.3** — Camada Bronze — ingestão raw 🔜
-- [ ] **v0.4** — Camada Silver — limpeza e deduplicação 🔜
-- [ ] **v0.5** — Camada Gold — KPIs com dbt 🔜
-- [ ] **v0.6** — DataSentinel — catálogo inteligente com IA 🔜
+- [x] **v0.3** — Producer de eventos de corridas ✅
+- [ ] **v0.4** — Camada Bronze — ingestão raw 🔜
+- [ ] **v0.5** — Camada Silver — limpeza e deduplicação 🔜
+- [ ] **v0.6** — Camada Gold — KPIs com dbt 🔜
+- [ ] **v0.7** — DataSentinel — catálogo inteligente com IA 🔜
 - [ ] **v1.0** — Deploy AWS com FinOps aplicado 🔜
 
 ---
@@ -139,6 +141,14 @@ ridestream-analytics-lakehouse/
 - Kafka, Zookeeper e Kafka UI configurados via Docker Compose
 - Interface visual do Kafka acessível em `http://localhost:8080`
 - Cluster `ridestream-local` online e pronto para receber eventos
+
+### ✅ v0.3 — Producer de Eventos de Corridas
+- Producer criado com `kafka-python` 2.3.0 e configuração via `python-dotenv`
+- `Faker` configurado com locale `pt_BR` para gerar dados realistas brasileiros
+- Eventos simulam 6 status do ciclo de vida de uma corrida: `requested`, `accepted`, `arrived`, `in_progress`, `completed` e `cancelled`
+- Coordenadas de origem e destino geradas dentro dos limites reais de São Paulo
+- Campo `rating` preenchido apenas quando `status == "completed"`, refletindo o fluxo real do app
+- 94 eventos enviados com sucesso para o tópico `ride-events` e validados via Kafka UI
 
 ---
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RideStream Analytics Lakehouse** is a real-time data pipeline portfolio project simulating ride-hailing event processing (à la Uber/99). It ingests ride events via Apache Kafka, processes them with Spark Structured Streaming, and stores them in a Data Lakehouse using Medallion Architecture (Bronze → Silver → Gold).
 
-**Current state:** v0.2 — Kafka infrastructure is live; Bronze/Silver/Gold layers and DataSentinel are not yet implemented.
+**Current state:** v0.3 — Kafka infrastructure is live and the ride event producer is working. Bronze/Silver/Gold layers and DataSentinel are not yet implemented.
 
 ## Infrastructure Commands
 
@@ -43,8 +43,20 @@ producer/ → Kafka (localhost:9092) → Spark Streaming → spark/bronze/ → s
 - **dbt** (`dbt/`) — SQL transformations over the Gold layer
 - **DataSentinel** (`catalog/`) — AI-powered data catalog using the Claude API
 
-### Event Types
-Ride events produced to Kafka: ride requests, GPS updates, payments, ratings.
+### Producer (`producer/ride_producer.py`)
+
+Simulates ride events and publishes them to Kafka. Key details:
+
+- **Kafka topic:** `ride-events`
+- **Ride status lifecycle:** `requested` → `accepted` → `arrived` → `in_progress` → `completed` / `cancelled`
+- **São Paulo coordinate bounds:** lat `[-23.68, -23.46]`, lon `[-46.82, -46.36]`
+- **`rating` field:** only populated when `status == "completed"`, `None` otherwise
+- **Environment config:** reads from `.env` (use `.env.example` as template); falls back to `localhost:9092` and `ride-events` if absent
+
+Run the producer:
+```bash
+python producer/ride_producer.py
+```
 
 ### Tech Stack
 | Layer | Technology |
@@ -60,9 +72,11 @@ Ride events produced to Kafka: ride requests, GPS updates, payments, ratings.
 
 ## Development Notes
 
+- Python virtual environment: `venv/` (gitignored) — activate with `source venv/Scripts/activate` on Windows
+- Dependencies: `requirements.txt` (kafka-python, faker, python-dotenv, tzdata)
+- Environment variables: `.env` file (gitignored) — copy `.env.example` to create yours
 - `data/` directory is gitignored — Parquet files and raw data are never committed
 - Spark checkpoints go to `checkpoints/` (gitignored) — these hold streaming state
-- Python virtual environments go in `venv/` or `.venv/` (gitignored)
 - Replication factor is set to 1 locally; production AWS MSK target is 3
 
 ## Roadmap Context
@@ -71,10 +85,11 @@ Ride events produced to Kafka: ride requests, GPS updates, payments, ratings.
 |---------|-------|
 | ✅ v0.1 | Project setup, VS Code, folder structure |
 | ✅ v0.2 | Kafka + Zookeeper via Docker Compose |
-| 🔜 v0.3 | Bronze layer — raw Kafka → Parquet ingestion |
-| 🔜 v0.4 | Silver layer — cleaning and deduplication |
-| 🔜 v0.5 | Gold layer — KPIs with dbt |
-| 🔜 v0.6 | DataSentinel — AI catalog with Claude API |
+| ✅ v0.3 | Ride event producer (`producer/ride_producer.py`) |
+| 🔜 v0.4 | Bronze layer — raw Kafka → Parquet ingestion |
+| 🔜 v0.5 | Silver layer — cleaning and deduplication |
+| 🔜 v0.6 | Gold layer — KPIs with dbt |
+| 🔜 v0.7 | DataSentinel — AI catalog with Claude API |
 | 🔜 v1.0 | AWS deployment with FinOps |
 
 
