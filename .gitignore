@@ -12,7 +12,9 @@ data/
 # nunca subir chaves de API, senhas ou tokens para o GitHub
 # =============================================================
 .env
-.env.*
+.env.local
+.env.production
+.env.staging
 *.pem
 *.key
 
