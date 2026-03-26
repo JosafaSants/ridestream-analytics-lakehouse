@@ -42,7 +42,7 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | ⚙️ **Setup do Ambiente** | VS Code, Git e estrutura de pastas | ✅ v0.1 |
 | 🏗️ **Infraestrutura** | Kafka e Zookeeper via Docker Compose | ✅ v0.2 |
 | 📡 **Producer** | Simulador de eventos de corridas para o Kafka | ✅ v0.3 |
-| 🥉 **Camada Bronze** | Ingestão raw do Kafka para Parquet | 🔜 v0.4 |
+| 🥉 **Camada Bronze** | Ingestão raw do Kafka para Delta Lake | ✅ v0.4 |
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | 🔜 v0.4 |
 | 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.5 |
 | 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.6 |
@@ -110,7 +110,39 @@ ridestream-analytics-lakehouse/
 
 ## 🚀 Como Executar
 
-> Em breve — infraestrutura sendo configurada na v0.2
+### 1. Infraestrutura Kafka
+
+```bash
+# Subir o cluster Kafka (Zookeeper + Broker + Kafka UI)
+docker compose -f infra/docker-compose.yml up -d
+```
+
+Kafka UI disponível em `http://localhost:8080`.
+
+### 2. Producer de Eventos
+
+```bash
+# Ativar o ambiente virtual
+source venv/Scripts/activate   # Windows
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Rodar o producer
+python producer/ride_producer.py
+```
+
+### 3. Camada Bronze — Job Spark
+
+```bash
+# Instalar dependências Spark (requer Java 17)
+pip install pyspark==3.5.1 delta-spark==3.2.0
+
+# Rodar o job Bronze
+python spark/bronze/bronze_job.py
+```
+
+> **Pré-requisitos para Windows:** Java 17 instalado e `JAVA_HOME` configurado. O job configura `HADOOP_HOME` automaticamente, mas requer o `winutils.exe` em `C:\hadoop\bin` — baixe a versão compatível com Hadoop 3.x em [cdarlint/winutils](https://github.com/cdarlint/winutils).
 
 ---
 
@@ -119,7 +151,7 @@ ridestream-analytics-lakehouse/
 - [x] **v0.1** — Setup do ambiente, Git e estrutura de pastas ✅
 - [x] **v0.2** — Infraestrutura Kafka via Docker Compose ✅
 - [x] **v0.3** — Producer de eventos de corridas ✅
-- [ ] **v0.4** — Camada Bronze — ingestão raw 🔜
+- [x] **v0.4** — Camada Bronze — ingestão raw para Delta Lake ✅
 - [ ] **v0.5** — Camada Silver — limpeza e deduplicação 🔜
 - [ ] **v0.6** — Camada Gold — KPIs com dbt 🔜
 - [ ] **v0.7** — DataSentinel — catálogo inteligente com IA 🔜
@@ -149,6 +181,38 @@ ridestream-analytics-lakehouse/
 - Coordenadas de origem e destino geradas dentro dos limites reais de São Paulo
 - Campo `rating` preenchido apenas quando `status == "completed"`, refletindo o fluxo real do app
 - 94 eventos enviados com sucesso para o tópico `ride-events` e validados via Kafka UI
+
+### ✅ v0.4 — Camada Bronze
+
+**O que a Bronze faz:** ingere os eventos brutos do Kafka e os persiste em Delta Lake sem nenhuma transformação de negócio — apenas o mínimo necessário para armazenar e rastrear os dados. É a fonte da verdade do pipeline: tudo que chega aqui é preservado.
+
+**Dependências adicionadas:**
+
+| Dependência | Versão | Função |
+|---|---|---|
+| Java 17 | 17+ | Runtime obrigatório para o Spark |
+| PySpark | 3.5.1 | Engine de processamento distribuído |
+| delta-spark | 3.2.0 | Formato Delta Lake com ACID e versionamento |
+| winutils | Hadoop 3.x | Compatibilidade do Spark com o sistema de arquivos Windows |
+
+**Estrutura de arquivos gerada:**
+
+```
+data/
+└── bronze/
+│   └── ride_events/
+│       └── year=2026/
+│           └── month=03/
+│               └── day=26/
+│                   └── part-00000-*.snappy.parquet
+└── checkpoints/
+    └── bronze/        # Estado do stream — nunca deletar
+```
+
+**Decisões técnicas:**
+- Particionamento por `year/month/day` para query pushdown no S3 (redução de custo)
+- Colunas `topic`, `partition` e `offset` mantidas para rastreabilidade e reprocessamento
+- Checkpoint em `data/checkpoints/bronze` garante exactly-once semantics entre reinicializações
 
 ---
 

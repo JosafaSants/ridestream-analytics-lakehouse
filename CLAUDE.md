@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RideStream Analytics Lakehouse** is a real-time data pipeline portfolio project simulating ride-hailing event processing (à la Uber/99). It ingests ride events via Apache Kafka, processes them with Spark Structured Streaming, and stores them in a Data Lakehouse using Medallion Architecture (Bronze → Silver → Gold).
 
-**Current state:** v0.3 — Kafka infrastructure is live and the ride event producer is working. Bronze/Silver/Gold layers and DataSentinel are not yet implemented.
+**Current state:** v0.4 — Kafka infrastructure is live, the ride event producer is working, and the Bronze layer job is implemented. Silver/Gold layers and DataSentinel are not yet implemented.
 
 ## Infrastructure Commands
 
@@ -37,11 +37,31 @@ producer/ → Kafka (localhost:9092) → Spark Streaming → spark/bronze/ → s
 ```
 
 ### Medallion Layers
-- **Bronze** (`spark/bronze/`) — Raw ingestion from Kafka to Parquet, no transformations
+- **Bronze** (`spark/bronze/`) — Raw ingestion from Kafka to Delta Lake, minimal transformation (bytes→string, partition columns only)
 - **Silver** (`spark/silver/`) — Cleaning, validation, deduplication
 - **Gold** (`spark/gold/`) — Business KPIs and aggregations
 - **dbt** (`dbt/`) — SQL transformations over the Gold layer
 - **DataSentinel** (`catalog/`) — AI-powered data catalog using the Claude API
+
+### Bronze Layer (`spark/bronze/bronze_job.py`)
+
+Reads from the `ride-events` Kafka topic and writes to Delta Lake. Key details:
+
+- **Kafka broker:** `localhost:9092` (host-facing port; use this when running Spark outside Docker)
+- **Output path:** `data/bronze/ride_events/` — partitioned by `year/month/day`
+- **Checkpoint path:** `data/checkpoints/bronze/` — never delete; holds streaming offset state
+- **Retained Kafka columns:** `topic`, `partition`, `offset` — kept for auditability and reprocessing
+- **Dropped columns:** `key`, `value` (promoted to `payload`), `headers`
+- **Windows config:** `HADOOP_HOME` and `PATH` are set programmatically at the top of the file — no manual env var setup needed, but `C:\hadoop\bin\winutils.exe` must exist (Hadoop 3.x)
+
+Run the Bronze job:
+```bash
+# Install Spark dependencies (requires Java 17 with JAVA_HOME set)
+pip install pyspark==3.5.1 delta-spark==3.2.0
+
+# Run the job (keep Kafka running first)
+python spark/bronze/bronze_job.py
+```
 
 ### Producer (`producer/ride_producer.py`)
 
@@ -86,7 +106,7 @@ python producer/ride_producer.py
 | ✅ v0.1 | Project setup, VS Code, folder structure |
 | ✅ v0.2 | Kafka + Zookeeper via Docker Compose |
 | ✅ v0.3 | Ride event producer (`producer/ride_producer.py`) |
-| 🔜 v0.4 | Bronze layer — raw Kafka → Parquet ingestion |
+| ✅ v0.4 | Bronze layer — raw Kafka → Delta Lake (`spark/bronze/bronze_job.py`) |
 | 🔜 v0.5 | Silver layer — cleaning and deduplication |
 | 🔜 v0.6 | Gold layer — KPIs with dbt |
 | 🔜 v0.7 | DataSentinel — AI catalog with Claude API |
