@@ -1,3 +1,5 @@
+import os
+
 # Importações do PySpark para processamento distribuído
 from pyspark.sql import DataFrame, SparkSession
 
@@ -6,22 +8,32 @@ from pyspark.sql import functions as F
 
 # Importações do Delta Lake para armazenamento no formato Delta
 from delta import configure_spark_with_delta_pip
-from delta.tables import DeltaTable
+
+# No Windows, o Spark depende do Hadoop para acessar o sistema de arquivos local.
+# Sem o HADOOP_HOME apontando para uma instalação mínima (winutils.exe),
+# o job falha ao tentar criar diretórios de output ou checkpoint.
+# Definir aqui garante que qualquer desenvolvedor Windows rode o job
+# sem precisar configurar variáveis de ambiente manualmente na máquina.
+os.environ["HADOOP_HOME"] = "C:\\hadoop"
+os.environ["PATH"] = "C:\\hadoop\\bin" + os.pathsep + os.environ.get("PATH", "")
 
 
 def criar_spark_session() -> SparkSession:
     # Cria um builder com o nome da aplicação — aparece na Spark UI
     builder = SparkSession.builder.appName("ridestream-bronze")
 
-    # Adiciona o conector Kafka para Spark 3.5.1 (structured streaming)
-    builder = builder.config(
-        "spark.jars.packages",
-        "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1",
+    # Ativa o suporte a tabelas Delta Lake no Spark e injeta os pacotes Kafka juntos
+    # extra_packages evita conflito de versão: o Delta resolve todas as dependências
+    # Maven em uma única passagem, sem sobrescrever o spark.jars.packages internamente
+    # - spark-sql-kafka: integração do DataFrame/Dataset API com o Kafka
+    # - spark-streaming-kafka: camada de baixo nível que o SQL depende para consumir offsets
+    builder = configure_spark_with_delta_pip(
+        builder,
+        extra_packages=[
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1",
+            "org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.1",
+        ],
     )
-
-    # Ativa o suporte a tabelas Delta Lake no Spark
-    # (registra o formato "delta" e as extensões SQL necessárias)
-    builder = configure_spark_with_delta_pip(builder)
 
     # Habilita o catálogo de sessão estendido do Delta Lake
     # sem isso o Spark não reconhece comandos como DESCRIBE HISTORY
@@ -43,7 +55,7 @@ def criar_spark_session() -> SparkSession:
 def ler_kafka(spark: SparkSession):
     # Endereço do broker Kafka — porta 29092 é a porta interna do Docker
     # usada quando o Spark roda dentro da mesma rede que o container Kafka
-    kafka_bootstrap = "localhost:29092"
+    kafka_bootstrap = "localhost:9092"
 
     # Nome do tópico que o producer escreve os eventos de corrida
     topico = "ride-events"
