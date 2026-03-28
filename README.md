@@ -43,9 +43,9 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | 🏗️ **Infraestrutura** | Kafka e Zookeeper via Docker Compose | ✅ v0.2 |
 | 📡 **Producer** | Simulador de eventos de corridas para o Kafka | ✅ v0.3 |
 | 🥉 **Camada Bronze** | Ingestão raw do Kafka para Delta Lake | ✅ v0.4 |
-| 🥈 **Camada Silver** | Limpeza, validação e deduplicação | 🔜 v0.4 |
-| 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.5 |
-| 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.6 |
+| 🥈 **Camada Silver** | Limpeza, validação e deduplicação | ✅ v0.5 |
+| 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.6 |
+| 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.7 |
 | ☁️ **Deploy AWS** | Subida para nuvem com FinOps aplicado | 🔜 v1.0 |
 
 ---
@@ -144,6 +144,13 @@ python spark/bronze/bronze_job.py
 
 > **Pré-requisitos para Windows:** Java 17 instalado e `JAVA_HOME` configurado. O job configura `HADOOP_HOME` automaticamente, mas requer o `winutils.exe` em `C:\hadoop\bin` — baixe a versão compatível com Hadoop 3.x em [cdarlint/winutils](https://github.com/cdarlint/winutils).
 
+### 4. Camada Silver — Job Spark
+
+```bash
+# Com o job Bronze rodando (ou dados já gravados em data/bronze/ride_events/):
+python spark/silver/silver_job.py
+```
+
 ---
 
 ## 🗺️ Roadmap
@@ -152,7 +159,7 @@ python spark/bronze/bronze_job.py
 - [x] **v0.2** — Infraestrutura Kafka via Docker Compose ✅
 - [x] **v0.3** — Producer de eventos de corridas ✅
 - [x] **v0.4** — Camada Bronze — ingestão raw para Delta Lake ✅
-- [ ] **v0.5** — Camada Silver — limpeza e deduplicação 🔜
+- [x] **v0.5** — Camada Silver — limpeza e deduplicação ✅
 - [ ] **v0.6** — Camada Gold — KPIs com dbt 🔜
 - [ ] **v0.7** — DataSentinel — catálogo inteligente com IA 🔜
 - [ ] **v1.0** — Deploy AWS com FinOps aplicado 🔜
@@ -181,6 +188,38 @@ python spark/bronze/bronze_job.py
 - Coordenadas de origem e destino geradas dentro dos limites reais de São Paulo
 - Campo `rating` preenchido apenas quando `status == "completed"`, refletindo o fluxo real do app
 - 94 eventos enviados com sucesso para o tópico `ride-events` e validados via Kafka UI
+
+### ✅ v0.5 — Camada Silver
+
+**O que a Silver faz:** lê a Bronze como uma fonte de streaming Delta e aplica as transformações de qualidade que promovem os dados brutos a registros confiáveis para análise.
+
+**Fluxo de transformações em `spark/silver/silver_job.py`:**
+
+1. **Parse do JSON** — a coluna `payload` (string bruta) é interpretada com `from_json` usando um schema explícito que espelha exatamente o que o producer envia
+2. **Filtro de inválidos** — registros onde `ride_id`, `status` ou `timestamp` são nulos são descartados; isso captura mensagens corrompidas ou incompletas que chegaram da Bronze
+3. **Deduplicação** — `dropDuplicates(["ride_id", "timestamp"])` elimina reentregas do Kafka (o broker garante *at least once*, não *exactly once*)
+4. **Colunas de partição** — `year`, `month` e `day` são extraídos do `timestamp` do evento (não do Kafka) para garantir que corridas com atraso caiam na partição correta
+
+**Estrutura de arquivos gerada:**
+
+```
+data/
+└── silver/
+│   └── ride_events/
+│       └── year=2026/
+│           └── month=03/
+│               └── day=26/
+│                   └── part-00000-*.snappy.parquet
+└── checkpoints/
+    └── silver/        # Estado do stream — nunca deletar
+```
+
+**Decisões técnicas:**
+- Schema explícito evita o custo de inferência e garante tipos corretos desde a leitura
+- `ignoreChanges=True` na leitura Delta tolera compactações e reprocessamentos na Bronze sem falhar
+- Checkpoint independente da Bronze: deletar o checkpoint da Silver reprocessa toda a Bronze sem afetar o job Bronze
+
+---
 
 ### ✅ v0.4 — Camada Bronze
 

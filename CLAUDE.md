@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RideStream Analytics Lakehouse** is a real-time data pipeline portfolio project simulating ride-hailing event processing (à la Uber/99). It ingests ride events via Apache Kafka, processes them with Spark Structured Streaming, and stores them in a Data Lakehouse using Medallion Architecture (Bronze → Silver → Gold).
 
-**Current state:** v0.4 — Kafka infrastructure is live, the ride event producer is working, and the Bronze layer job is implemented. Silver/Gold layers and DataSentinel are not yet implemented.
+**Current state:** v0.5 — Kafka infrastructure is live, the ride event producer is working, the Bronze layer job is implemented, and the Silver layer job is implemented. Gold layer and DataSentinel are not yet implemented.
 
 ## Infrastructure Commands
 
@@ -42,6 +42,27 @@ producer/ → Kafka (localhost:9092) → Spark Streaming → spark/bronze/ → s
 - **Gold** (`spark/gold/`) — Business KPIs and aggregations
 - **dbt** (`dbt/`) — SQL transformations over the Gold layer
 - **DataSentinel** (`catalog/`) — AI-powered data catalog using the Claude API
+
+### Silver Layer (`spark/silver/silver_job.py`)
+
+Reads from the Bronze Delta table as a streaming source and writes cleaned, deduplicated events to Delta Lake. Key details:
+
+- **Source:** `data/bronze/ride_events/` — read via `readStream.format("delta")` with `ignoreChanges=True`
+- **Output path:** `data/silver/ride_events/` — partitioned by `year/month/day`
+- **Checkpoint path:** `data/checkpoints/silver/` — never delete; holds streaming offset state
+- **Transformations applied:**
+  1. `from_json(col("payload"), schema)` — parses the raw JSON string using an explicit schema
+  2. Filter — drops records where `ride_id`, `status`, or `timestamp` are null (corrupted messages)
+  3. `dropDuplicates(["ride_id", "timestamp"])` — removes Kafka at-least-once redeliveries
+  4. Partition columns — `year`, `month`, `day` extracted from the event `timestamp` (not Kafka timestamp)
+- **`rating` field:** nullable — only populated when `status == "completed"`
+- **Windows config:** `HADOOP_HOME` and `PATH` set programmatically at the top of the file, same as Bronze
+
+Run the Silver job:
+```bash
+# Requires Bronze data already in data/bronze/ride_events/ (or Bronze job running in parallel)
+python spark/silver/silver_job.py
+```
 
 ### Bronze Layer (`spark/bronze/bronze_job.py`)
 
@@ -107,7 +128,7 @@ python producer/ride_producer.py
 | ✅ v0.2 | Kafka + Zookeeper via Docker Compose |
 | ✅ v0.3 | Ride event producer (`producer/ride_producer.py`) |
 | ✅ v0.4 | Bronze layer — raw Kafka → Delta Lake (`spark/bronze/bronze_job.py`) |
-| 🔜 v0.5 | Silver layer — cleaning and deduplication |
+| ✅ v0.5 | Silver layer — cleaning and deduplication (`spark/silver/silver_job.py`) |
 | 🔜 v0.6 | Gold layer — KPIs with dbt |
 | 🔜 v0.7 | DataSentinel — AI catalog with Claude API |
 | 🔜 v1.0 | AWS deployment with FinOps |
