@@ -45,7 +45,7 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | 🥉 **Camada Bronze** | Ingestão raw do Kafka para Delta Lake | ✅ v0.4 |
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | ✅ v0.5 |
 | 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | ✅ v0.6 |
-| 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.7 |
+| 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | ✅ v0.7 |
 | ☁️ **Deploy AWS** | Subida para nuvem com FinOps aplicado | 🔜 v1.0 |
 
 ---
@@ -161,7 +161,7 @@ python spark/silver/silver_job.py
 - [x] **v0.4** — Camada Bronze — ingestão raw para Delta Lake ✅
 - [x] **v0.5** — Camada Silver — limpeza e deduplicação ✅
 - [x] **v0.6** — Camada Gold implementada com dbt-duckdb: 6 modelos SQL, 15 testes de qualidade aprovados ✅
-- [ ] **v0.7** — DataSentinel — catálogo inteligente com Claude API 🔜
+- [x] **v0.7** — DataSentinel — catálogo inteligente com IA (GPT-4o-mini + OpenAI) ✅
 - [ ] **v1.0** — Deploy AWS com FinOps aplicado 🔜
 
 ---
@@ -252,6 +252,18 @@ data/
 - Particionamento por `year/month/day` para query pushdown no S3 (redução de custo)
 - Colunas `topic`, `partition` e `offset` mantidas para rastreabilidade e reprocessamento
 - Checkpoint em `data/checkpoints/bronze` garante exactly-once semantics entre reinicializações
+
+### ✅ v0.7 — DataSentinel (Catálogo Inteligente com IA)
+
+- Módulo `catalog/sentinel.py` com 5 funções
+- Leitura de schemas da Silver via PySpark + Delta Lake
+- Leitura de schemas da Gold via DuckDB
+- Geração de documentação automática com GPT-4o-mini (OpenAI)
+- 7 arquivos `.md` gerados em `catalog/docs/`
+- Detecção automática de campos com alto percentual de nulos
+- Estatísticas por campo: min, max, média para campos numéricos
+
+---
 
 ### ✅ v0.6 — Camada Gold com dbt-duckdb
 
