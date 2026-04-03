@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RideStream Analytics Lakehouse** is a real-time data pipeline portfolio project simulating ride-hailing event processing (à la Uber/99). It ingests ride events via Apache Kafka, processes them with Spark Structured Streaming, and stores them in a Data Lakehouse using Medallion Architecture (Bronze → Silver → Gold).
 
-**Current state:** v0.5 — Kafka infrastructure is live, the ride event producer is working, the Bronze layer job is implemented, and the Silver layer job is implemented. Gold layer and DataSentinel are not yet implemented.
+**Current state:** v0.6 — Kafka infrastructure is live, the ride event producer is working, the Bronze layer job is implemented, the Silver layer job is implemented, and the Gold layer is implemented with dbt-duckdb. DataSentinel is not yet implemented.
 
 ## Infrastructure Commands
 
@@ -84,6 +84,32 @@ pip install pyspark==3.5.1 delta-spark==3.2.0
 python spark/bronze/bronze_job.py
 ```
 
+### Gold Layer (`dbt/ridestream/models/gold/`)
+
+Reads Silver Parquet files via DuckDB and materializes business KPI tables. Key details:
+
+- **dbt-core version:** 1.11.7
+- **dbt-duckdb version:** 1.9.1 (installed in `venv/`)
+- **profiles.yml:** `C:\Users\JosafaBarbosadosSant\.dbt\profiles.yml` — outside the repo, never commit
+- **DuckDB database:** `data/gold/ridestream.duckdb` — gitignored, created on first `dbt run`
+- **Source:** `data/silver/ride_events/**/*.parquet` — read with `read_parquet(..., hive_partitioning=true)`
+- **Models:**
+  - `fct_rides_completed` — completed rides with fare and rating (revenue events)
+  - `fct_rides_cancelled` — cancelled rides (lost revenue events)
+  - `dim_drivers` — driver dimension with aggregated performance metrics
+  - `agg_rides_hourly` — ride volume by hour of day (demand analysis)
+  - `agg_cancellation_rate` — daily cancellation rate (operational health)
+  - `agg_avg_rating` — average rating ranking per driver
+- **Quality tests:** 15 tests defined in `schema.yml` (`not_null`, `unique` on key columns)
+- **Dependency resolution:** `dim_drivers` and `agg_avg_rating` use `{{ ref('fct_rides_completed') }}` — dbt handles execution order automatically
+
+Run the Gold layer:
+```bash
+cd dbt\ridestream
+dbt run       # materializes all 6 models into DuckDB
+dbt test      # runs 15 quality tests
+```
+
 ### Producer (`producer/ride_producer.py`)
 
 Simulates ride events and publishes them to Kafka. Key details:
@@ -129,7 +155,7 @@ python producer/ride_producer.py
 | ✅ v0.3 | Ride event producer (`producer/ride_producer.py`) |
 | ✅ v0.4 | Bronze layer — raw Kafka → Delta Lake (`spark/bronze/bronze_job.py`) |
 | ✅ v0.5 | Silver layer — cleaning and deduplication (`spark/silver/silver_job.py`) |
-| 🔜 v0.6 | Gold layer — KPIs with dbt |
+| ✅ v0.6 | Gold layer — dbt-duckdb with 6 SQL models and 15 quality tests |
 | 🔜 v0.7 | DataSentinel — AI catalog with Claude API |
 | 🔜 v1.0 | AWS deployment with FinOps |
 

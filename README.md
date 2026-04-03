@@ -44,7 +44,7 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | 📡 **Producer** | Simulador de eventos de corridas para o Kafka | ✅ v0.3 |
 | 🥉 **Camada Bronze** | Ingestão raw do Kafka para Delta Lake | ✅ v0.4 |
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | ✅ v0.5 |
-| 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | 🔜 v0.6 |
+| 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | ✅ v0.6 |
 | 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | 🔜 v0.7 |
 | ☁️ **Deploy AWS** | Subida para nuvem com FinOps aplicado | 🔜 v1.0 |
 
@@ -160,8 +160,8 @@ python spark/silver/silver_job.py
 - [x] **v0.3** — Producer de eventos de corridas ✅
 - [x] **v0.4** — Camada Bronze — ingestão raw para Delta Lake ✅
 - [x] **v0.5** — Camada Silver — limpeza e deduplicação ✅
-- [ ] **v0.6** — Camada Gold — KPIs com dbt 🔜
-- [ ] **v0.7** — DataSentinel — catálogo inteligente com IA 🔜
+- [x] **v0.6** — Camada Gold implementada com dbt-duckdb: 6 modelos SQL, 15 testes de qualidade aprovados ✅
+- [ ] **v0.7** — DataSentinel — catálogo inteligente com Claude API 🔜
 - [ ] **v1.0** — Deploy AWS com FinOps aplicado 🔜
 
 ---
@@ -252,6 +252,35 @@ data/
 - Particionamento por `year/month/day` para query pushdown no S3 (redução de custo)
 - Colunas `topic`, `partition` e `offset` mantidas para rastreabilidade e reprocessamento
 - Checkpoint em `data/checkpoints/bronze` garante exactly-once semantics entre reinicializações
+
+### ✅ v0.6 — Camada Gold com dbt-duckdb
+
+**O que a Gold faz:** consome os Parquet da Silver e os transforma em tabelas analíticas prontas para consumo — KPIs de receita, cancelamentos, demanda por hora e desempenho de motoristas.
+
+**Dependências adicionadas:**
+
+| Dependência | Versão | Função |
+|---|---|---|
+| dbt-core | 1.11.7 | Orquestração e materialização dos modelos SQL |
+| dbt-duckdb | 1.9.1 | Adapter que conecta dbt ao DuckDB local |
+
+**Modelos implementados em `dbt/ridestream/models/gold/`:**
+
+| Modelo | Tipo | Pergunta respondida |
+|---|---|---|
+| `fct_rides_completed` | Fato | Quais corridas geraram receita? |
+| `fct_rides_cancelled` | Fato | Quais corridas foram perdidas? |
+| `dim_drivers` | Dimensão | Qual o desempenho de cada motorista? |
+| `agg_rides_hourly` | Agregação | Em que horário há mais demanda? |
+| `agg_cancellation_rate` | Agregação | A operação está saudável por dia? |
+| `agg_avg_rating` | Agregação | Quais motoristas têm melhor avaliação? |
+
+**15 testes de qualidade definidos em `schema.yml`:** `not_null` e `unique` nas colunas-chave de cada modelo.
+
+**Decisões técnicas:**
+- DuckDB lê os Parquet da Silver com `read_parquet(..., hive_partitioning=true)` — sem servidor, sem custo
+- `{{ ref('fct_rides_completed') }}` nos modelos dependentes: o dbt resolve a ordem de execução automaticamente
+- `profiles.yml` fora do repositório (`~/.dbt/`) — credenciais nunca entram no git
 
 ---
 
