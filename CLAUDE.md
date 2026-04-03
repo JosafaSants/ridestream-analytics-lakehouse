@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RideStream Analytics Lakehouse** is a real-time data pipeline portfolio project simulating ride-hailing event processing (à la Uber/99). It ingests ride events via Apache Kafka, processes them with Spark Structured Streaming, and stores them in a Data Lakehouse using Medallion Architecture (Bronze → Silver → Gold).
 
-**Current state:** v0.6 — Kafka infrastructure is live, the ride event producer is working, the Bronze layer job is implemented, the Silver layer job is implemented, and the Gold layer is implemented with dbt-duckdb. DataSentinel is not yet implemented.
+**Current state:** v0.7 — Kafka infrastructure is live, the ride event producer is working, the Bronze layer job is implemented, the Silver layer job is implemented, the Gold layer is implemented with dbt-duckdb, and DataSentinel is implemented with OpenAI GPT-4o-mini.
 
 ## Infrastructure Commands
 
@@ -84,6 +84,26 @@ pip install pyspark==3.5.1 delta-spark==3.2.0
 python spark/bronze/bronze_job.py
 ```
 
+### DataSentinel (`catalog/sentinel.py`)
+
+AI-powered data catalog that reads schemas from Silver and Gold layers and generates Markdown documentation automatically. Key details:
+
+- **Model:** `gpt-4o-mini` (OpenAI) | `temperature: 0.2`
+- **API key:** `OPENAI_API_KEY` in `.env` — never hardcoded
+- **Output:** `catalog/docs/*.md` — 7 files generated with timestamp
+- **Functions:**
+  - `carregar_config()` — loads `.env` and initializes OpenAI client
+  - `criar_spark_session()` — minimal Spark session (Delta only, no Kafka)
+  - `extrair_schema_silver()` — reads Delta table in batch mode; extracts field names/types, null percentages, min/max/avg for numeric fields
+  - `extrair_schema_gold()` — reads DuckDB tables; extracts table list and field schemas
+  - `gerar_documentacao()` — builds prompt and calls GPT-4o-mini; returns Markdown
+  - `salvar_documentacao()` — writes output to `catalog/docs/` with timestamp
+
+Run DataSentinel:
+```bash
+python catalog/sentinel.py
+```
+
 ### Gold Layer (`dbt/ridestream/models/gold/`)
 
 Reads Silver Parquet files via DuckDB and materializes business KPI tables. Key details:
@@ -156,7 +176,7 @@ python producer/ride_producer.py
 | ✅ v0.4 | Bronze layer — raw Kafka → Delta Lake (`spark/bronze/bronze_job.py`) |
 | ✅ v0.5 | Silver layer — cleaning and deduplication (`spark/silver/silver_job.py`) |
 | ✅ v0.6 | Gold layer — dbt-duckdb with 6 SQL models and 15 quality tests |
-| 🔜 v0.7 | DataSentinel — AI catalog with Claude API |
+| ✅ v0.7 | DataSentinel — AI catalog with GPT-4o-mini, 7 docs generated |
 | 🔜 v1.0 | AWS deployment with FinOps |
 
 
