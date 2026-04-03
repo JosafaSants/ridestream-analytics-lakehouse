@@ -1,0 +1,34 @@
+# Nome do projeto dbt — identifica este projeto em logs e documentação
+name: 'ridestream'
+version: '1.0.0'
+
+# Versão mínima do dbt-core compatível com este projeto
+require-dbt-version: ">=1.8.0"
+
+# Configuração global do dbt
+config-version: 2
+
+# Perfil de conexão — deve bater com o nome em profiles.yml
+profile: 'ridestream'
+
+# Caminhos padrão do projeto (relativos à pasta dbt/ridestream/)
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Pasta onde o dbt grava os artefatos gerados (não commitar)
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configurações dos modelos por camada
+models:
+  ridestream:
+    gold:
+      # Materializar como tabela — cada dbt run regrava a tabela completa
+      # Na AWS isso vira uma tabela no Glue Catalog lida pelo Athena
+      +materialized: table

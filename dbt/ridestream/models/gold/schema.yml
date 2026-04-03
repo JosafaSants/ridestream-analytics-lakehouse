@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: fct_rides_completed
+    description: "Corridas concluídas — evento de receita do RideStream"
+    columns:
+      - name: ride_id
+        description: "Identificador único da corrida"
+        tests:
+          - not_null
+          - unique
+      - name: driver_id
+        description: "Identificador do motorista"
+        tests:
+          - not_null
+      - name: valor_corrida
+        description: "Valor cobrado pela corrida em reais"
+        tests:
+          - not_null
+
+  - name: fct_rides_cancelled
+    description: "Corridas canceladas — evento de perda de receita"
+    columns:
+      - name: ride_id
+        description: "Identificador único da corrida cancelada"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_drivers
+    description: "Dimensão de motoristas com métricas agregadas de desempenho"
+    columns:
+      - name: driver_id
+        description: "Identificador único do motorista"
+        tests:
+          - not_null
+          - unique
+      - name: total_corridas
+        description: "Total de corridas concluídas pelo motorista"
+        tests:
+          - not_null
+
+  - name: agg_rides_hourly
+    description: "Volume de corridas por hora do dia"
+    columns:
+      - name: hora_do_dia
+        description: "Hora do dia (0-23)"
+        tests:
+          - not_null
+          - unique
+
+  - name: agg_cancellation_rate
+    description: "Taxa de cancelamento por dia"
+    columns:
+      - name: taxa_cancelamento_pct
+        description: "Percentual de corridas canceladas no dia"
+        tests:
+          - not_null
+
+  - name: agg_avg_rating
+    description: "Avaliação média por motorista"
+    columns:
+      - name: driver_id
+        description: "Identificador único do motorista"
+        tests:
+          - not_null
+          - unique
+      - name: avaliacao_media
+        description: "Média das avaliações recebidas pelo motorista"
+        tests:
+          - not_null
