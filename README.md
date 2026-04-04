@@ -5,13 +5,15 @@
 **Pipeline de Dados em Tempo Real para Análise de Corridas**
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-2.8+-231F20?style=for-the-badge&logo=apachekafka&logoColor=white)](https://kafka.apache.org)
+[![Redpanda](https://img.shields.io/badge/Redpanda-v23.3-E6363A?style=for-the-badge&logo=redpanda&logoColor=white)](https://redpanda.com)
 [![Apache Spark](https://img.shields.io/badge/Apache_Spark-3.5+-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)](https://spark.apache.org)
 [![dbt](https://img.shields.io/badge/dbt-1.7+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://getdbt.com)
 [![Delta Lake](https://img.shields.io/badge/Delta_Lake-3.0+-003366?style=for-the-badge)](https://delta.io)
 [![Docker](https://img.shields.io/badge/Docker-24+-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![MinIO](https://img.shields.io/badge/MinIO-latest-C72E49?style=for-the-badge&logo=minio&logoColor=white)](https://min.io)
+[![Grafana](https://img.shields.io/badge/Grafana-latest-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Em_Construção-orange?style=for-the-badge)]()
+[![Status](https://img.shields.io/badge/Status-v1.0_Completo-brightgreen?style=for-the-badge)]()
 
 <br/>
 
@@ -46,7 +48,7 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | 🥈 **Camada Silver** | Limpeza, validação e deduplicação | ✅ v0.5 |
 | 🥇 **Camada Gold** | KPIs e agregações de negócio com dbt | ✅ v0.6 |
 | 🛡️ **DataSentinel** | Catálogo inteligente de dados com IA | ✅ v0.7 |
-| ☁️ **Deploy AWS** | Subida para nuvem com FinOps aplicado | 🔜 v1.0 |
+| ☁️ **Stack Cloud-Agnostic** | Redpanda + MinIO + Prometheus + Grafana local | ✅ v1.0 |
 
 ---
 
@@ -79,13 +81,14 @@ O projeto demonstra na prática como construir um pipeline de dados moderno do z
 | Categoria | Tecnologia | Versão |
 |---|---|---|
 | Linguagem | Python | 3.11 |
-| Mensageria | Apache Kafka | 2.8+ |
-| Processamento | Apache Spark Structured Streaming | 3.5+ |
-| Formato de Dados | Parquet + Delta Lake | 3.0+ |
-| Transformação | dbt | 1.7+ |
-| Catálogo IA | DataSentinel (Claude API) | - |
+| Mensageria | Redpanda (API Kafka-compatível) | v23.3 |
+| Processamento | Apache Spark Structured Streaming | 3.5.1 |
+| Formato de Dados | Parquet + Delta Lake | 3.2.0 |
+| Storage | MinIO (S3-compatível) | latest |
+| Transformação | dbt-core + dbt-duckdb | 1.11.7 + 1.9.1 |
+| Catálogo IA | DataSentinel (GPT-4o-mini) | - |
+| Observabilidade | Prometheus + Grafana | latest |
 | Infraestrutura | Docker + Docker Compose | 24+ |
-| Nuvem | AWS (S3, MSK, EMR) | - |
 
 ---
 
@@ -110,20 +113,29 @@ ridestream-analytics-lakehouse/
 
 ## 🚀 Como Executar
 
-### 1. Infraestrutura Kafka
+### Pré-requisitos
+- Docker Desktop 24+
+- Python 3.11
+- Java 17 (para o Spark)
+- `winutils.exe` em `C:\hadoop\bin` (somente Windows)
 
+### 1. Infraestrutura completa
 ```bash
-# Subir o cluster Kafka (Zookeeper + Broker + Kafka UI)
+# Sobe Redpanda + MinIO + Prometheus + Grafana
 docker compose -f infra/docker-compose.yml up -d
 ```
 
-Kafka UI disponível em `http://localhost:8080`.
+| Interface | URL | Credenciais |
+|---|---|---|
+| Kafka UI | http://localhost:8080 | — |
+| MinIO Console | http://localhost:9001 | ridestream / ridestream123 |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | admin / ridestream123 |
 
 ### 2. Producer de Eventos
-
 ```bash
-# Ativar o ambiente virtual
-source venv/Scripts/activate   # Windows
+# Ativar o ambiente virtual (Windows)
+venv\Scripts\Activate.ps1
 
 # Instalar dependências
 pip install -r requirements.txt
@@ -133,23 +145,18 @@ python producer/ride_producer.py
 ```
 
 ### 3. Camada Bronze — Job Spark
-
 ```bash
-# Instalar dependências Spark (requer Java 17)
-pip install pyspark==3.5.1 delta-spark==3.2.0
-
-# Rodar o job Bronze
 python spark/bronze/bronze_job.py
 ```
 
-> **Pré-requisitos para Windows:** Java 17 instalado e `JAVA_HOME` configurado. O job configura `HADOOP_HOME` automaticamente, mas requer o `winutils.exe` em `C:\hadoop\bin` — baixe a versão compatível com Hadoop 3.x em [cdarlint/winutils](https://github.com/cdarlint/winutils).
+Os dados são gravados em `s3a://ridestream/bronze/ride_events` no MinIO.
 
 ### 4. Camada Silver — Job Spark
-
 ```bash
-# Com o job Bronze rodando (ou dados já gravados em data/bronze/ride_events/):
 python spark/silver/silver_job.py
 ```
+
+Os dados são gravados em `s3a://ridestream/silver/ride_events` no MinIO.
 
 ---
 
@@ -162,11 +169,31 @@ python spark/silver/silver_job.py
 - [x] **v0.5** — Camada Silver — limpeza e deduplicação ✅
 - [x] **v0.6** — Camada Gold implementada com dbt-duckdb: 6 modelos SQL, 15 testes de qualidade aprovados ✅
 - [x] **v0.7** — DataSentinel — catálogo inteligente com IA (GPT-4o-mini + OpenAI) ✅
-- [ ] **v1.0** — Deploy AWS com FinOps aplicado 🔜
+- [x] **v1.0** — Stack cloud-agnostic local: Redpanda + MinIO + Prometheus + Grafana ✅
 
 ---
 
 ## 📝 Diário de Desenvolvimento
+
+### ✅ v1.0 — Stack Cloud-Agnostic com Observabilidade
+
+**Decisão arquitetural:** migração do Kafka Docker + storage local para uma stack cloud-agnostic gratuita, onde cada serviço tem equivalente direto em produção.
+
+**O que foi implementado:**
+- **Redpanda** substitui Kafka + Zookeeper em um único container — API 100% compatível, zero mudança no producer e nos jobs Spark
+- **MinIO** substitui o diretório `data/` local — Bronze e Silver agora gravam via protocolo `s3a://` como fariam no AWS S3
+- **Prometheus** coleta métricas do Redpanda nativamente na porta 9644
+- **Grafana** com dashboard customizado mostrando batches escritos no tópico `ride-events`
+- Jobs Bronze e Silver adaptados com `hadoop-aws` e `aws-java-sdk-bundle` para suporte ao protocolo s3a
+- Pipeline end-to-end validado: Producer → Redpanda → Spark Bronze → MinIO → Spark Silver → MinIO
+
+**Interfaces disponíveis:**
+- Kafka UI: http://localhost:8080
+- MinIO Console: http://localhost:9001
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+
+---
 
 ### ✅ v0.1 — Setup do Ambiente
 - Repositório criado no GitHub com proteção da branch `main`
@@ -293,6 +320,27 @@ data/
 - DuckDB lê os Parquet da Silver com `read_parquet(..., hive_partitioning=true)` — sem servidor, sem custo
 - `{{ ref('fct_rides_completed') }}` nos modelos dependentes: o dbt resolve a ordem de execução automaticamente
 - `profiles.yml` fora do repositório (`~/.dbt/`) — credenciais nunca entram no git
+
+---
+
+## 💡 Decisão Arquitetural — Stack Cloud-Agnostic
+
+A v1.0 adota uma stack 100% local e gratuita onde cada componente tem equivalente direto em produção na nuvem. Essa decisão demonstra maturidade técnica: entender os fundamentos antes de depender dos serviços gerenciados.
+
+| Local (gratuito) | Produção (cloud) | Custo estimado/mês |
+|---|---|---|
+| Redpanda (Docker) | Amazon MSK Serverless | ~$30–100 |
+| MinIO (Docker) | Amazon S3 | ~$2–10 |
+| Spark local | Amazon EMR Serverless | Pay-per-use |
+| Prometheus + Grafana | Amazon CloudWatch | ~$10–30 |
+| Docker Compose | Terraform + ECS | — |
+
+### Por que isso importa para FinOps?
+
+- **Parquet colunar vs JSON:** redução de 60–80% no volume de armazenamento
+- **Particionamento por date:** elimina full scan em queries filtradas por data no S3/Athena
+- **Redpanda vs MSK:** menor custo por unidade de throughput, sem Zookeeper
+- **EMR Serverless com auto-scaling:** cluster nunca ocioso, cobrança por segundo de uso
 
 ---
 
