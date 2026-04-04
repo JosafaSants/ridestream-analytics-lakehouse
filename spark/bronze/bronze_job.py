@@ -22,32 +22,46 @@ def criar_spark_session() -> SparkSession:
     # Cria um builder com o nome da aplicação — aparece na Spark UI
     builder = SparkSession.builder.appName("ridestream-bronze")
 
-    # Ativa o suporte a tabelas Delta Lake no Spark e injeta os pacotes Kafka juntos
-    # extra_packages evita conflito de versão: o Delta resolve todas as dependências
-    # Maven em uma única passagem, sem sobrescrever o spark.jars.packages internamente
-    # - spark-sql-kafka: integração do DataFrame/Dataset API com o Kafka
-    # - spark-streaming-kafka: camada de baixo nível que o SQL depende para consumir offsets
+    # Ativa o suporte a tabelas Delta Lake no Spark e injeta os pacotes Kafka juntos.
+    # hadoop-aws é obrigatório para o prefixo s3a:// funcionar — sem ele o Spark
+    # não sabe como se comunicar com o MinIO (ou S3 em produção).
+    # aws-java-sdk-bundle é a dependência que o hadoop-aws precisa para autenticar.
     builder = configure_spark_with_delta_pip(
         builder,
         extra_packages=[
             "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1",
             "org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.1",
+            "org.apache.hadoop:hadoop-aws:3.3.4",
+            "com.amazonaws:aws-java-sdk-bundle:1.12.262",
         ],
     )
 
-    # Habilita o catálogo de sessão estendido do Delta Lake
-    # sem isso o Spark não reconhece comandos como DESCRIBE HISTORY
+    # Extensões Delta Lake
     builder = builder.config(
         "spark.sql.extensions",
         "io.delta.sql.DeltaSparkSessionExtension",
     )
 
-    # Define o catálogo padrão do Spark como o catálogo Delta
-    # permite usar sintaxe SQL padrão com tabelas Delta
+    # Catálogo Delta como padrão
     builder = builder.config(
         "spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.delta.catalog.DeltaCatalog",
     )
+
+    # --- Configurações do MinIO (equivalente ao S3 em produção) ---
+    # Em produção na AWS, basta remover estas 4 linhas — o Spark usa
+    # as credenciais IAM automaticamente via instance profile
+    builder = builder.config("spark.hadoop.fs.s3a.endpoint", "http://localhost:9100")
+    builder = builder.config("spark.hadoop.fs.s3a.access.key", "ridestream")
+    builder = builder.config("spark.hadoop.fs.s3a.secret.key", "ridestream123")
+    # Desabilita verificação de região — necessário para MinIO local
+    # Em produção com AWS, remover esta linha
+    builder = builder.config("spark.hadoop.fs.s3a.path.style.access", "true")
+
+    # AQE: Adaptive Query Execution — otimiza o plano de execução em tempo real
+    # reduz shuffles desnecessários e lida melhor com dados desbalanceados
+    builder = builder.config("spark.sql.adaptive.enabled", "true")
+    builder = builder.config("spark.sql.adaptive.coalescePartitions.enabled", "true")
 
     return builder.getOrCreate()
 
@@ -130,24 +144,13 @@ def escrever_bronze(
 
 
 if __name__ == "__main__":
-    # Caminhos de saída e checkpoint — relativos à raiz do projeto
-    # o diretório "data/" é ignorado pelo git (ver .gitignore)
-    CAMINHO_SAIDA = "data/bronze/ride_events"
-    CAMINHO_CHECKPOINT = "data/checkpoints/bronze"
+    # Caminhos no MinIO usando protocolo s3a — compatível com AWS S3 em produção.
+    # Em produção, basta trocar "localhost:9100" pelo endpoint S3 real no .env
+    CAMINHO_SAIDA = "s3a://ridestream/bronze/ride_events"
+    CAMINHO_CHECKPOINT = "s3a://ridestream/checkpoints/bronze"
 
     spark = criar_spark_session()
-
-    # Inicia o stream de leitura do Kafka — ainda não processa nada,
-    # apenas declara a fonte de dados
     df_raw = ler_kafka(spark)
-
-    # Aplica as transformações mínimas da camada Bronze:
-    # converte bytes em string, mantém o timestamp e adiciona colunas de partição
     df_bronze = transformar_bronze(df_raw)
-
-    # Inicia a escrita contínua no Delta Lake e obtém o handle da query
     query = escrever_bronze(df_bronze, CAMINHO_SAIDA, CAMINHO_CHECKPOINT)
-
-    # Mantém o job rodando indefinidamente até ser interrompido manualmente
-    # sem isso, o processo terminaria imediatamente após iniciar o stream
     query.awaitTermination()

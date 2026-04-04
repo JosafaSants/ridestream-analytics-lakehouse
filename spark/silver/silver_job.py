@@ -56,52 +56,54 @@ def criar_spark_session() -> SparkSession:
     # Cria um builder com o nome da aplicação — aparece na Spark UI
     builder = SparkSession.builder.appName("RideStream-Silver")
 
-    # Ativa o suporte a tabelas Delta Lake no Spark e injeta os pacotes Kafka juntos
-    # extra_packages evita conflito de versão: o Delta resolve todas as dependências
-    # Maven em uma única passagem, sem sobrescrever o spark.jars.packages internamente
-    # - spark-sql-kafka: integração do DataFrame/Dataset API com o Kafka
-    # - spark-streaming-kafka: camada de baixo nível que o SQL depende para consumir offsets
+    # hadoop-aws e aws-java-sdk-bundle são necessários para o prefixo s3a://
+    # funcionar tanto com MinIO local quanto com AWS S3 em produção
     builder = configure_spark_with_delta_pip(
         builder,
         extra_packages=[
             "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1",
             "org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.1",
+            "org.apache.hadoop:hadoop-aws:3.3.4",
+            "com.amazonaws:aws-java-sdk-bundle:1.12.262",
         ],
     )
 
-    # Habilita o catálogo de sessão estendido do Delta Lake
-    # sem isso o Spark não reconhece comandos como DESCRIBE HISTORY
+    # Extensões Delta Lake
     builder = builder.config(
         "spark.sql.extensions",
         "io.delta.sql.DeltaSparkSessionExtension",
     )
 
-    # Define o catálogo padrão do Spark como o catálogo Delta
-    # permite usar sintaxe SQL padrão com tabelas Delta
+    # Catálogo Delta como padrão
     builder = builder.config(
         "spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.delta.catalog.DeltaCatalog",
     )
 
+    # --- Configurações do MinIO (equivalente ao S3 em produção) ---
+    # Em produção na AWS, remover estas 4 linhas — credenciais via IAM role
+    builder = builder.config("spark.hadoop.fs.s3a.endpoint", "http://localhost:9100")
+    builder = builder.config("spark.hadoop.fs.s3a.access.key", "ridestream")
+    builder = builder.config("spark.hadoop.fs.s3a.secret.key", "ridestream123")
+    # Path style necessário para MinIO — em AWS S3 remover esta linha
+    builder = builder.config("spark.hadoop.fs.s3a.path.style.access", "true")
+
+    # AQE: otimiza o plano de execução em tempo real
+    builder = builder.config("spark.sql.adaptive.enabled", "true")
+    builder = builder.config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+
     return builder.getOrCreate()
 
 
 def ler_bronze(spark: SparkSession):
-    # Lemos a Bronze como uma fonte de streaming Delta, não como um batch.
-    # O Spark rastreia automaticamente quais arquivos Parquet já foram processados
-    # usando o diretório de checkpoint da Silver — a cada micro-batch, ele só lê
-    # os arquivos novos que o job Bronze gravou desde a última execução.
-    # É como um "cursor" que avança conforme a Bronze cresce.
-    #
-    # ignoreChanges=True: a Bronze usa .partitionBy(), o que pode causar
-    # reescrita de arquivos existentes durante compactações ou reprocessamentos.
-    # Sem essa opção, o Spark jogaria um erro ao detectar um arquivo já visto
-    # sendo modificado. Com ela, simplesmente ignoramos essas mudanças.
+    # Lemos a Bronze do MinIO via protocolo s3a — mesmo comportamento
+    # de antes, só o caminho mudou de data/bronze/ para s3a://ridestream/bronze/
+    # ignoreChanges=True: evita erros quando a Bronze reescreve arquivos
+    # durante compactações ou reprocessamentos
     return (
-        spark.readStream
-        .format("delta")
+        spark.readStream.format("delta")
         .option("ignoreChanges", True)
-        .load("data/bronze/ride_events")
+        .load("s3a://ridestream/bronze/ride_events")
     )
 
 
@@ -152,8 +154,7 @@ def transformar_silver(df, schema: StructType):
     # Usar o timestamp do evento garante que corridas do mesmo dia fiquem na mesma
     # partição mesmo que cheguem com atraso — importante para consultas por data.
     df_silver = (
-        df_dedup
-        .withColumn("year", year(col("timestamp")).cast(IntegerType()))
+        df_dedup.withColumn("year", year(col("timestamp")).cast(IntegerType()))
         .withColumn("month", month(col("timestamp")).cast(IntegerType()))
         .withColumn("day", dayofmonth(col("timestamp")).cast(IntegerType()))
     )
@@ -162,27 +163,14 @@ def transformar_silver(df, schema: StructType):
 
 
 def escrever_silver(df):
-    # Modo "append": cada micro-batch apenas adiciona novos registros ao Delta Lake.
-    # Nunca sobrescrevemos dados já gravados — isso é fundamental em pipelines de dados
-    # porque permite auditoria, time travel e reprocessamento sem perda de histórico.
-    # O modo "complete" reescreveria a tabela inteira a cada micro-batch, o que seria
-    # inviável em produção: imagine reescrever meses de corridas a cada 10 segundos.
-    #
-    # Exactly-once semantics (exatamente uma vez):
-    # O checkpoint registra dois estados essenciais:
-    #   1. Quais offsets da fonte (Bronze Delta) já foram lidos
-    #   2. Quais micro-batches já foram confirmados como gravados
-    # Se o job cair no meio de um micro-batch, ao reiniciar o Spark verifica o checkpoint:
-    # se o batch foi lido mas não confirmado, ele reprocessa; se já foi confirmado,
-    # pula. Combinado com as garantias ACID do Delta Lake, isso garante que nenhuma
-    # corrida seja gravada duas vezes nem perdida — mesmo em caso de falha.
+    # Grava no MinIO via s3a — mesma semântica de antes:
+    # append + checkpoint garantem exactly-once e retomada sem perda de dados
     return (
-        df.writeStream
-        .format("delta")
+        df.writeStream.format("delta")
         .outputMode("append")
         .partitionBy("year", "month", "day")
-        .option("checkpointLocation", "data/checkpoints/silver")
-        .start("data/silver/ride_events")
+        .option("checkpointLocation", "s3a://ridestream/checkpoints/silver")
+        .start("s3a://ridestream/silver/ride_events")
     )
 
 
